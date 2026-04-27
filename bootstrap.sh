@@ -35,7 +35,7 @@ PHASES=(
   "4:scripts/04-inbounds.sh"
   "5:scripts/05-warp-outbound.sh"
   "6:scripts/06-routing.sh"
-  "7:scripts/07-subscription-test.sh"
+  "7:scripts/07-subscription.sh"
   "9:scripts/09-tests.sh"
   "10:scripts/10-finalize-docs.sh"
 )
