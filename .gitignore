@@ -1,0 +1,6 @@
+config.env
+notes/
+*.log
+*.bak
+.DS_Store
+__pycache__/
