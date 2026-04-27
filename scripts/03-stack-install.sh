@@ -64,7 +64,10 @@ if (( need_install )); then
 fi
 /usr/local/bin/xray version 2>&1 | head -n1 || true
 
-# Xray systemd unit + config dir
+# Xray systemd unit + config dir.
+# Remove systemd dropin from any previous install (Xray-install.sh / Hiddify) that
+# would force a -config flag and ignore our -confdir.
+rm -rf /etc/systemd/system/xray.service.d /usr/local/etc/xray
 install -d -m 755 /etc/xray /etc/xray/configs.d /var/log/xray
 write_file /etc/systemd/system/xray.service 644 root:root <<'EOF'
 [Unit]
