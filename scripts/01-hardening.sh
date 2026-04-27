@@ -37,7 +37,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get -y -qq -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" full-upgrade >/dev/null
 ensure_pkg curl wget vim htop ufw fail2ban unattended-upgrades chrony \
-           ca-certificates gnupg lsb-release sudo dnsutils net-tools rsync rsyslog jq
+           ca-certificates gnupg lsb-release sudo dnsutils net-tools rsync rsyslog jq unzip
 
 # --- 1.2 BBR + TCP tuning ---------------------------------------------------
 log "[1.2] BBR + TCP sysctls"
