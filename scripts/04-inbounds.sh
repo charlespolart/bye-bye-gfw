@@ -245,14 +245,10 @@ write_file /etc/caddy/Caddyfile 644 root:root <<EOF
 ${CDN_FQDN}:2087 {
   tls /etc/caddy/origin/cdn.crt /etc/caddy/origin/cdn.key
 
-  @vlessws {
-    path ${CDN_WS_PATH}
-    header Connection *Upgrade*
-    header Upgrade websocket
+  @vlessws path ${CDN_WS_PATH}
+  handle @vlessws {
+    reverse_proxy 127.0.0.1:9100
   }
-  reverse_proxy @vlessws 127.0.0.1:9100
-
-  # decoy: anything else returns a small HTML
   handle {
     respond "<!doctype html><html><body><h1>Hello.</h1></body></html>" 200
   }
