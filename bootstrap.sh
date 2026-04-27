@@ -31,7 +31,7 @@ REPO_ROOT="$SCRIPT_DIR"
 PHASES=(
   "1:scripts/01-hardening.sh"
   "2:scripts/02-dns-check.sh"
-  "3:scripts/03-hiddify-install.sh"
+  "3:scripts/03-stack-install.sh"
   "4:scripts/04-inbounds.sh"
   "5:scripts/05-warp-outbound.sh"
   "6:scripts/06-routing.sh"
