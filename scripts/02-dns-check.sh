@@ -44,7 +44,8 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
     existing=$(cf_api GET "/zones/${ZONE_ID}/dns_records?type=${type}&name=${fqdn}")
     id=$(echo "$existing" | jq -r '.result[0].id // ""')
     current_content=$(echo "$existing" | jq -r '.result[0].content // ""')
-    current_proxied=$(echo "$existing" | jq -r '.result[0].proxied // ""')
+    # CF returns proxied=null for DNS-only records; normalize to "false"
+    current_proxied=$(echo "$existing" | jq -r 'if .result[0].proxied == true then "true" else "false" end')
     body=$(jq -nc --arg type "$type" --arg name "$fqdn" --arg content "$content" --argjson proxied "$proxied" \
       '{type:$type,name:$name,content:$content,proxied:$proxied,ttl:1}')
 
