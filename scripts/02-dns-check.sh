@@ -14,13 +14,67 @@ load_env
 : "${PANEL_SUBDOMAIN:?}"; : "${SUB_SUBDOMAIN:?}"; : "${HY2_SUBDOMAIN:?}"; : "${CDN_SUBDOMAIN:?}"
 : "${VPS_IPV4:?VPS_IPV4 must be set in config.env}"
 
-log "Phase 2 — DNS check (resolver: 1.1.1.1, expecting fresh records)"
+log "Phase 2 — DNS check"
 
-dns_ok=true
 PANEL="${PANEL_SUBDOMAIN}.${DOMAIN}"
 SUB="${SUB_SUBDOMAIN}.${DOMAIN}"
 HY2="${HY2_SUBDOMAIN}.${DOMAIN}"
 CDN="${CDN_SUBDOMAIN}.${DOMAIN}"
+
+# --- Cloudflare API automation (optional) -----------------------------------
+# If CLOUDFLARE_API_TOKEN is set, ensure all 4 records via API before verifying.
+if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  command -v jq >/dev/null 2>&1 || die "jq required for API mode (apt install jq)"
+  log "Cloudflare API mode — ensuring records (token detected)"
+
+  cf_api() {
+    local method="$1" path="$2" data="${3:-}"
+    local args=(-sS -X "$method" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+    [[ -n "$data" ]] && args+=(--data "$data")
+    curl "${args[@]}" "https://api.cloudflare.com/client/v4${path}"
+  }
+
+  ZONE_ID=$(cf_api GET "/zones?name=${DOMAIN}" | jq -r '.result[0].id // empty')
+  [[ -n "$ZONE_ID" ]] || die "Cloudflare zone not found for ${DOMAIN}. Token scope correct?"
+  log "  zone_id=${ZONE_ID}"
+
+  cf_ensure() {
+    local fqdn="$1" content="$2" type="$3" proxied="$4"
+    local existing id current_content current_proxied body
+    existing=$(cf_api GET "/zones/${ZONE_ID}/dns_records?type=${type}&name=${fqdn}")
+    id=$(echo "$existing" | jq -r '.result[0].id // ""')
+    current_content=$(echo "$existing" | jq -r '.result[0].content // ""')
+    current_proxied=$(echo "$existing" | jq -r '.result[0].proxied // ""')
+    body=$(jq -nc --arg type "$type" --arg name "$fqdn" --arg content "$content" --argjson proxied "$proxied" \
+      '{type:$type,name:$name,content:$content,proxied:$proxied,ttl:1}')
+
+    if [[ -z "$id" ]]; then
+      log "  [create] ${fqdn} ${type} ${content} (proxied=${proxied})"
+      cf_api POST "/zones/${ZONE_ID}/dns_records" "$body" >/dev/null
+    elif [[ "$current_content" != "$content" ]] || [[ "$current_proxied" != "$proxied" ]]; then
+      log "  [update] ${fqdn} ${type} ${content} (was ${current_content} proxied=${current_proxied})"
+      cf_api PUT "/zones/${ZONE_ID}/dns_records/${id}" "$body" >/dev/null
+    else
+      log "  [ok]     ${fqdn} ${type} ${content} (proxied=${proxied})"
+    fi
+  }
+
+  cf_ensure "$PANEL" "$VPS_IPV4" A false
+  cf_ensure "$SUB"   "$VPS_IPV4" A false
+  cf_ensure "$HY2"   "$VPS_IPV4" A false
+  cf_ensure "$CDN"   "$VPS_IPV4" A true
+  if [[ -n "${VPS_IPV6:-}" ]]; then
+    cf_ensure "$PANEL" "$VPS_IPV6" AAAA false
+    cf_ensure "$SUB"   "$VPS_IPV6" AAAA false
+    cf_ensure "$HY2"   "$VPS_IPV6" AAAA false
+  fi
+  log "  waiting 5s for propagation..."
+  sleep 5
+fi
+
+# --- Verification (always runs) ---------------------------------------------
+log "Verifying with @1.1.1.1"
+dns_ok=true
 
 check_direct() {
   local name="$1"
