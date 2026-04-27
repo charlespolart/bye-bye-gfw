@@ -17,7 +17,7 @@ source "$REPO_ROOT/lib/common.sh"
 require_root
 load_env
 
-XRAY_VERSION="${XRAY_VERSION:-v25.10.0}"
+XRAY_VERSION="${XRAY_VERSION:-v26.3.27}"
 SECRETS_DIR=/etc/bye-bye-gfw
 
 log "Phase 3 — Install Xray ${XRAY_VERSION} + Hysteria2 + Caddy"
@@ -40,7 +40,7 @@ if ! command -v caddy >/dev/null 2>&1; then
   systemctl stop caddy >/dev/null 2>&1 || true
   systemctl disable caddy >/dev/null 2>&1 || true
 fi
-caddy version 2>&1 | head -1
+caddy version 2>&1 | head -n1 || true
 
 # --- 3.3 Xray-core (binary) ------------------------------------------------
 log "[3.3] Xray ${XRAY_VERSION}"
@@ -62,7 +62,7 @@ if (( need_install )); then
   install -m 644 xray-extracted/geosite.dat /usr/local/share/xray/geosite.dat
   rm -rf xray.zip xray-extracted
 fi
-/usr/local/bin/xray version 2>&1 | head -1
+/usr/local/bin/xray version 2>&1 | head -n1 || true
 
 # Xray systemd unit + config dir
 install -d -m 755 /etc/xray /etc/xray/configs.d /var/log/xray
@@ -88,9 +88,11 @@ EOF
 # --- 3.4 Hysteria2 ---------------------------------------------------------
 log "[3.4] Hysteria2"
 if ! command -v hysteria >/dev/null 2>&1; then
-  curl -fsSL https://get.hy2.sh/ | bash </dev/null
+  curl -fsSL https://get.hy2.sh/ -o /tmp/hy2-install.sh
+  bash /tmp/hy2-install.sh </dev/null
+  rm -f /tmp/hy2-install.sh
 fi
-hysteria version 2>&1 | head -1
+hysteria version 2>&1 | head -n1 || true
 # Get-hy2 already creates /etc/systemd/system/hysteria-server.service and a
 # /etc/hysteria user. We override the config in phase 4.
 
@@ -98,9 +100,11 @@ hysteria version 2>&1 | head -1
 log "[3.5] REALITY keypair"
 if [[ ! -f "$SECRETS_DIR/reality_keys.env" ]]; then
   keys=$(/usr/local/bin/xray x25519)
-  priv=$(echo "$keys" | awk -F': ' '/[Pp]rivate key/{print $2}')
-  pub=$(echo  "$keys" | awk -F': ' '/[Pp]ublic key/{print $2}')
-  [[ -n "$priv" && -n "$pub" ]] || die "x25519 keypair generation failed"
+  # Xray 26.x format: "PrivateKey: ..." / "Password (PublicKey): ..."
+  # Older format:     "Private key: ..." / "Public key: ..."
+  priv=$(echo "$keys" | grep -oE '(PrivateKey|Private key):\s*\S+' | awk '{print $NF}' | head -n1)
+  pub=$(echo  "$keys" | grep -oE '(PublicKey\)?|Public key):\s*\S+' | awk '{print $NF}' | head -n1)
+  [[ -n "$priv" && -n "$pub" ]] || die "x25519 keypair generation failed (output: $keys)"
   cat > "$SECRETS_DIR/reality_keys.env" <<EOF
 REALITY_PRIVATE_KEY=${priv}
 REALITY_PUBLIC_KEY=${pub}
@@ -116,9 +120,9 @@ systemctl daemon-reload
 state_mark phase3
 log "Phase 3 done."
 log ""
-log "  xray:     $(/usr/local/bin/xray version 2>&1 | head -1)"
-log "  hysteria: $(hysteria version 2>&1 | grep Version | head -1 || hysteria version 2>&1 | head -1)"
-log "  caddy:    $(caddy version 2>&1 | head -1)"
+log "  xray:     $(/usr/local/bin/xray version 2>&1 | head -n1 || true)"
+log "  hysteria: $(hysteria version 2>&1 | grep Version | head -1 || hysteria version 2>&1 | head -n1 || true)"
+log "  caddy:    $(caddy version 2>&1 | head -n1 || true)"
 log ""
 log "Services installed but DISABLED — phase 4 generates configs and starts them."
 log ""
